@@ -6,6 +6,39 @@ package_types = {'package_type1': [800, 1200],
                  'package_type2': [800, 600]}  # dictionary of available package types with dimensions in cm
 
 
+def get_box(box_index, boxes_df):
+    """
+    return box from boxes_df stored with box_index
+    :param box_index:
+    :param boxes_df: list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,
+    'rotated':, 'x_center': , 'y_center':}
+    :return:
+    """
+    return [b for b in boxes_df if b['box_index'] == box_index][0]
+
+
+def get_package(package_id, packages_df):
+    """
+    return package of package_id from packages_df
+    :param package_id:
+    :param packages_df: list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
+    :return:
+    """
+    return [p for p in packages_df if p['package_id'] == package_id][0]
+
+
+def get_boxes_in_package(package_id, shipping_info):
+    """
+    return boxes stored in package with package_id
+    :param package_id:
+    :param shipping_dict: dictionary with a shipping info in a format:
+    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]    :return:
+    """
+    boxes = shipping_info['boxes']
+    return [box for box in boxes if box['package_id'] == package_id]
+
+
 def if_box_fits_to_empty_package(box_dimension_x, box_dimension_y, package_type):
     """
     This function check if a box of certain dimensions fits to package of package_type
@@ -62,7 +95,7 @@ def get_boxes(filename):
     """
     This function reads in file with dimensions of boxes to be shipped,
     :param filename:
-    :return: pandas DataFrame of boxes to be shipped with following columns:
+    :return: list of dictionaries with following columns:
     'box_index' - number of the box as read from the file
     'dimensions_x', 'dimension_y' - dimensions of box as read from file
     'package_id' - id of a package where box located, initialized with 0
@@ -139,17 +172,21 @@ def if_box_fits_to_package(box_index, package_id, shipping_dict):
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     :return: True or False
     """
-    '''
     boxes_df = shipping_dict['boxes']
-    box_to_fit = (boxes_df.loc[boxes_df['box_index'] == box_index]).to_dict('list')
+    box_to_fit = get_box(box_index, boxes_df)
     box_dimension_y = box_to_fit['dimension_y']
-    packages_df = shipping_dict['packages'].to_list()
-    package = (packages_df.loc[packages_df['package_id'] == package_id]).to_dict('list')
+    packages_df = shipping_dict['packages']
+    package = get_package(package_id, packages_df)
 
     # list boxes that are already in package_id
-    boxes_in_package = [box for box in boxes_df]
-    '''
-    return True
+    boxes_in_package = get_boxes_in_package(package_id, shipping_dict)
+    # list coordinates of tops of boxes and find maximum
+    max_top_y_of_boxes = max([box['y_center']+ box['dimension_y']/2.0 for box in boxes_in_package])
+    # check if highest box top + height of box to fit is less than package height
+    if max_top_y_of_boxes + box_to_fit['dimension_y'] <= package['dimension_y']:
+        return True
+    else:
+        return False
 
 
 def pick_package_for_box(box, shipping_dict):
@@ -285,18 +322,22 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     return shipping_dict
 
 
-def if_box_fits_to_shipping(shipping_dict, box):
+def if_box_fits_to_shipping(box, shipping_dict):
+    """
+    return True if box fits to at least one package in shipping_dict
+    :param box: {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}
+    :param shipping_dict: dictionary with a shipping info in a format:
+    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
+    :return: True or False
+    """
+    packages = shipping_dict['packages']
+    for package in packages:
+        if if_box_fits_to_package(box['box_index'], package['package_id'], shipping_dict):
+            return True
+    return False
+
     return True
-
-
-def get_box(box_index, boxes_df):
-    """
-    return box from boxes_df stored with box_index
-    :param box_index:
-    :param boxes_df:
-    :return:
-    """
-    return [b for b in boxes_df if b['box_index'] == box_index][0]
 
 
 def pack_boxes_randomly(shipping_dict):
@@ -324,15 +365,14 @@ def pack_boxes_randomly(shipping_dict):
             # put box to package into a lower left corner
             package_id = 1
         else:
-            if not if_box_fits_to_shipping(shipping_dict, box):  # check if there is space left in existing packages
+            if not if_box_fits_to_shipping(box, shipping_dict):  # check if there is space left in existing packages
                 # if no space, add new random package
                 package_type_to_fill = pick_package_type(box)
                 shipping_dict = add_package(shipping_dict, package_type_to_fill)
-                package_id = max([pack["package_id"] for pack in packages_df]) + 1
+                package_id = max([pack["package_id"] for pack in shipping_dict['packages']])
             else:
                 # pick a random package out of existing, but so box would fit
                 package_id = pick_package_for_box(box, shipping_dict)
-
         # put box of box_index
         shipping_dict = put_box_in_package(shipping_dict, box_index, package_id)
 
