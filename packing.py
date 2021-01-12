@@ -40,11 +40,12 @@ def boxes_checked(boxes_df):
     removes any packages that don't fit to neither of packages
     :param boxes_df: Pandas DataFrame with columns = ['box_index', 'dimension_x', 'dimension_y','package_id',
                 'rotated', 'x_center' , 'y_center']
-    :return: updated DataFrame of boxes
+    :return: updated list of boxes
     """
-    for index, box in boxes_df.iterrows():
+    updated_boxes = []
+    for box in boxes_df:
         # check that box fits into dimensions of available package_types
-        if_fits_to_packages = []
+        if_fits_to_packages = []  # array of boolean
         for package_type in package_types.keys():
             if_fits_to_packages.append(if_box_fits_to_empty_package(box['dimension_x'],
                                                                     box['dimension_y'],
@@ -52,8 +53,9 @@ def boxes_checked(boxes_df):
         if not any(if_fits_to_packages):
             print('box %.0fx%.0f does not fit to any of package types. Removing from shipping...' % (
                 box['dimension_x'], box['dimension_y']))
-            boxes_df.drop(boxes_df.index[index], inplace=True)
-    return boxes_df
+            continue
+        updated_boxes.append(box)
+    return updated_boxes
 
 
 def get_boxes(filename):
@@ -67,11 +69,15 @@ def get_boxes(filename):
     'rotated' - flag indicates if rotation happened, initialized with 'Not rotated'
     'x_center' , 'y_center' - x and y coordinates of box center
     """
-    boxes_df = pd.read_excel(filename, names=['box_index', 'dimension_x', 'dimension_y'], header=0)
-    boxes_df['package_id'] = 0
-    boxes_df['rotated'] = 'Not rotated'
-    boxes_df['x_center'] = 0.0
-    boxes_df['y_center'] = 0.0
+    boxes_df = []
+    for index, box in pd.read_excel(filename, names=['box_index', 'dimension_x', 'dimension_y'], header=0).iterrows():
+        box = box.to_dict()
+        box['package_id'] = 0
+        box['rotated'] = 'Not rotated'
+        box['x_center'] = 0.0
+        box['y_center'] = 0.0
+        boxes_df.append(box)
+
     boxes_df = boxes_checked(boxes_df)
     return boxes_df
 
@@ -80,7 +86,7 @@ def pick_package_type(box):
     """
     This function picks a random package type if there are more than one available
     or returns the only available package type
-    :param box: pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
+    :param box: {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}
     :return: one of the keys from global dictionary package_types
     """
     if len(package_types) > 1:
@@ -89,8 +95,8 @@ def pick_package_type(box):
         while not found:
             ind = np.random.randint(0, len(available_types))  # random index of a package type
             package_type_to_fill = list(available_types)[ind]
-            if if_box_fits_to_empty_package(box['dimension_x'][0],
-                                            box['dimension_y'][0],
+            if if_box_fits_to_empty_package(box['dimension_x'],
+                                            box['dimension_y'],
                                             package_type_to_fill):
                 found = True
             else:
@@ -111,11 +117,11 @@ def pick_package(shipping_dict):
     randomly pick a package form the dictionary
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-    'boxes': pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
-    :return: package pd.DataFrame(['package_id','package_type','dimension_x','dimension_y'])
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
+    :return: package dictionary {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
     """
     packages_df = shipping_dict['packages']
-    if len(packages_df)==0:
+    if len(packages_df) == 0:
         print("No packages to pick from shipping_dict, exit")
         return False
     ind = np.random.randint(0, len(packages_df))
@@ -130,7 +136,7 @@ def if_box_fits_to_package(box_index, package_id, shipping_dict):
     :param package_id: index of package in shipping_dict
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-    'boxes': pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     :return: True or False
     """
     '''
@@ -148,12 +154,12 @@ def if_box_fits_to_package(box_index, package_id, shipping_dict):
 
 def pick_package_for_box(box, shipping_dict):
     """
-    This function picks a random package from one of the packages in shipping_dict that satisfy condition
-    that box fits to package dimension, returns id of a package
-    :param shipping_dict: dictionary with a shipping info in a format:
-    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-    'boxes': pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
-    :param box: pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
+    This function picks a random package from one of the packages in shipping_dict that satisfy condition that box
+    fits to package dimension, returns id of a package :param shipping_dict: dictionary with a shipping info in a
+    format: {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]]
+    :param box: dictionary with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,
+    'rotated':,'x_center': , 'y_center':}
     :return: package_id - id of a package where to put box
     """
     picked = False
@@ -167,7 +173,8 @@ def pick_package_for_box(box, shipping_dict):
 def calculate_area_packages(packages_df):
     """
     calculate sum of packages area of packages
-    :param packages_df: pd.DataFrame(['package_id','package_type','dimension_x','dimension_y']
+    :param packages_df: list of package dictionaries in format:
+    [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}]
     :return: area: sum of packages area
     """
     area = sum([package['dimension_x'] * package['dimension_y'] for package in packages_df])
@@ -179,7 +186,7 @@ def add_package(shipping_dict, package_type):
     add package of package_type to shipping_dict
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-    'boxes': pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center'])
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]}
     :param package_type: one of the keys from global dictionary package_types
     :return: updated shipping_dict
     """
@@ -206,8 +213,8 @@ def if_intersect(box_1, box_2):
     :param box_2: {['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']}
     :return: True of False
     """
-    right_edge_box_1 = box_1['x_center'] + box_1['dimension_x'][0] / 2.0
-    left_edge_box_1 = box_1['x_center'] - box_1['dimension_x'][0] / 2.0
+    right_edge_box_1 = box_1['x_center'] + box_1['dimension_x'] / 2.0
+    left_edge_box_1 = box_1['x_center'] - box_1['dimension_x'] / 2.0
     right_edge_box_2 = box_2['x_center'] + box_2['dimension_x'] / 2.0
     left_edge_box_2 = box_2['x_center'] - box_2['dimension_x'] / 2.0
     # if (left_edge_box_1 < right_edge_box_2 and left_edge_box_1 >= left_edge_box_2) or (right_edge_box_1 >
@@ -228,7 +235,7 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     assign random coordinates to box inside package
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-    'boxes': pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]}
     :param box_index: index of a box to be moved
     :param package_id: id of a package where to put box
     :return: updated shipping_dict
@@ -237,19 +244,18 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     packages_df = shipping_dict['packages']
     # list boxes from package with package_id
     boxes_list = []
-    for index, box in boxes_df.iterrows():
+    for box in boxes_df:
         if box['package_id'] == package_id:
-            box_to_dict = box.to_dict()
-            boxes_list.append(box_to_dict)
+            boxes_list.append(box)
     #    boxes_list = [box.to_dict('list') for index, box in boxes_df.iterrows() if box['package_id'] == package_id]
     # find box with box_index
-    box_to_move = (boxes_df.loc[boxes_df['box_index'] == box_index]).to_dict('list')
+    box_to_move = get_box(box_index, boxes_df)
     # update box's package_id
     box_to_move['package_id'] = package_id
     # generate random x coordinate of box center
     package_length = [package['dimension_x'] for package in packages_df if package['package_id'] == package_id][0]
-    box_to_move['x_center'] = np.random.uniform(box_to_move['dimension_x'][0] / 2.0,
-                                                package_length - box_to_move['dimension_x'][0] / 2.0)
+    box_to_move['x_center'] = np.random.uniform(box_to_move['dimension_x'] / 2.0,
+                                                package_length - box_to_move['dimension_x'] / 2.0)
     # boxes in package that intersect with box_to_move in x direction
     intersect_boxes = []
     for box in boxes_list:
@@ -259,26 +265,38 @@ def put_box_in_package(shipping_dict, box_index, package_id):
             intersect_boxes.append(box)
     if len(intersect_boxes) > 0:
         # put on top of highest box
-        #print("intersected boxes:------")
-        #print(intersect_boxes)
+        # print("intersected boxes:------")
+        # print(intersect_boxes)
         y_top = max([(box['y_center'] + box['dimension_y'] / 2.0) for box in intersect_boxes])
-        box_to_move['y_center'] = y_top + box_to_move['dimension_y'][0] / 2.0
-        #print(box_to_move)
-        #print("------------------------")
+        box_to_move['y_center'] = y_top + box_to_move['dimension_y'] / 2.0
+        # print(box_to_move)
+        # print("------------------------")
     else:
         # put on bottom of the package
-        box_to_move['y_center'] = box_to_move['dimension_y'][0] / 2.0  # put on bottom of the package
-    for index, row in boxes_df.iterrows():
-        if row['box_index'] == box_to_move['box_index'][0]:
-            boxes_df.at[index, 'package_id'] = box_to_move['package_id']
-            boxes_df.at[index, 'x_center'] = box_to_move['x_center']
-            boxes_df.at[index, 'y_center'] = box_to_move['y_center']
-    shipping_dict['boxes'] = boxes_df
+        box_to_move['y_center'] = box_to_move['dimension_y'] / 2.0  # put on bottom of the package
+    updated_boxes = []
+    for index in range(len(boxes_df)):
+        row = boxes_df[index]
+        if row['box_index'] == box_to_move['box_index']:
+            updated_boxes.append(box_to_move)
+        else:
+            updated_boxes.append(row)
+    shipping_dict['boxes'] = updated_boxes
     return shipping_dict
 
 
 def if_box_fits_to_shipping(shipping_dict, box):
     return True
+
+
+def get_box(box_index, boxes_df):
+    """
+    return box from boxes_df stored with box_index
+    :param box_index:
+    :param boxes_df:
+    :return:
+    """
+    return [b for b in boxes_df if b['box_index'] == box_index][0]
 
 
 def pack_boxes_randomly(shipping_dict):
@@ -288,16 +306,15 @@ def pack_boxes_randomly(shipping_dict):
     new packages of a random type is taken
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-
-    'boxes': pd.DataFrame(['box_index', 'dimension_x', 'dimension_y','package_id','rotated', 'x_center' , 'y_center']
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     :return: updated shipping_dic
     """
     boxes_df = shipping_dict['boxes']
 
-    random_box_index_list = np.random.permutation([b['box_index'] for index, b in boxes_df.iterrows()])
+    random_box_index_list = np.random.permutation([b['box_index'] for b in boxes_df])
     for box_index in random_box_index_list:
         packages_df = shipping_dict['packages']
-        box = boxes_df[boxes_df['box_index'] == box_index].to_dict('list')
+        box = get_box(box_index, boxes_df)
         # pick package where to put box
         if len(packages_df) == 0:
             # if shipping_dic doesn't have any packages yet, pick a type of a package randomly, but so box would fit
@@ -333,8 +350,8 @@ def initialize_shipping(filename):
     {'area': overall area occupied by all packages,
     'n_packages': number of packages,
      'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
-     'boxes': # pandas DataFrame with columns = ['box_index', 'dimension_x', 'dimension_y','package_id','rotated',
-                'x_center' , 'y_center']
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
     """
     shipping_dict = dict(columns=['area', 'n_packages', 'packages', 'boxes'],
                          dtype=[float, int, list, list])
