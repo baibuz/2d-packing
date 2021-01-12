@@ -1,10 +1,16 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+import matplotlib.pyplot as plt
 
 global packages_dimensions, input_file_boxes
 package_types = {'package_type1': [800, 1200],
                  'package_type2': [800, 600]}  # dictionary of available package types with dimensions in cm
 
+seed = 1
+#np.random.seed(seed)
+np.random.seed(None)
+print('seed = ',np.random.get_state()[1][0])
 
 def get_box(box_index, boxes_df):
     """
@@ -31,7 +37,7 @@ def get_boxes_in_package(package_id, shipping_info):
     """
     return boxes stored in package with package_id
     :param package_id:
-    :param shipping_dict: dictionary with a shipping info in a format:
+    :param shipping_info: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]    :return:
     """
@@ -39,15 +45,31 @@ def get_boxes_in_package(package_id, shipping_info):
     return [box for box in boxes if box['package_id'] == package_id]
 
 
+def rotate_box(box):
+    """
+    alternate box coordinates and return updated box
+    :param box: {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':, 'x_center': , 'y_center':}
+    :return:updated box
+    """
+    box_x = box['dimension_x']
+    box_y = box['dimension_y']
+    box['dimension_x'] = box_y
+    box['dimension_y'] = box_x
+    box['rotated'] = 'Rotated'
+    return box
+
+
 def if_box_fits_to_empty_package(box_dimension_x, box_dimension_y, package_type):
     """
-    This function check if a box of certain dimensions fits to package of package_type
+    This function check if a box of certain dimensions fits to package of package_type,
+    box can be rotated
     :param box_dimension_y: height of box
     :param box_dimension_x: length of box
     :param package_type: str 'package_type1', 'package_type2' etc corresponding to global variable package_types.keys()
     :return: True or False
     """
     package_dimensions = package_types[package_type]
+
     if (box_dimension_x > package_dimensions[0]) and (box_dimension_x > package_dimensions[1]):
         return False
     if (box_dimension_y > package_dimensions[1]) and (box_dimension_y > package_dimensions[0]):
@@ -177,11 +199,12 @@ def if_box_fits_to_package(box_index, package_id, shipping_dict):
     box_dimension_y = box_to_fit['dimension_y']
     packages_df = shipping_dict['packages']
     package = get_package(package_id, packages_df)
-
+    if box_to_fit['dimension_x'] > package['dimension_x']:
+        return False
     # list boxes that are already in package_id
     boxes_in_package = get_boxes_in_package(package_id, shipping_dict)
     # list coordinates of tops of boxes and find maximum
-    max_top_y_of_boxes = max([box['y_center']+ box['dimension_y']/2.0 for box in boxes_in_package])
+    max_top_y_of_boxes = max([box['y_center'] + box['dimension_y'] / 2.0 for box in boxes_in_package])
     # check if highest box top + height of box to fit is less than package height
     if max_top_y_of_boxes + box_to_fit['dimension_y'] <= package['dimension_y']:
         return True
@@ -192,7 +215,8 @@ def if_box_fits_to_package(box_index, package_id, shipping_dict):
 def pick_package_for_box(box, shipping_dict):
     """
     This function picks a random package from one of the packages in shipping_dict that satisfy condition that box
-    fits to package dimension, returns id of a package :param shipping_dict: dictionary with a shipping info in a
+    fits to package dimension, returns id of a package
+    :param shipping_dict: dictionary with a shipping info in a
     format: {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]]
     :param box: dictionary with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,
@@ -269,7 +293,8 @@ def if_intersect(box_1, box_2):
 
 def put_box_in_package(shipping_dict, box_index, package_id):
     """
-    assign random coordinates to box inside package
+    assign random coordinates to box inside package, it is assumed that box fits to package
+    box is not rotated inside function
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]}
@@ -284,7 +309,6 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     for box in boxes_df:
         if box['package_id'] == package_id:
             boxes_list.append(box)
-    #    boxes_list = [box.to_dict('list') for index, box in boxes_df.iterrows() if box['package_id'] == package_id]
     # find box with box_index
     box_to_move = get_box(box_index, boxes_df)
     # update box's package_id
@@ -374,6 +398,18 @@ def pack_boxes_randomly(shipping_dict):
                 # pick a random package out of existing, but so box would fit
                 package_id = pick_package_for_box(box, shipping_dict)
         # put box of box_index
+        # check if box needs to be rotated before put to package_id
+        package = get_package(package_id, shipping_dict['packages'])
+        if box['dimension_x'] > package['dimension_x'] or box['dimension_y'] > package['dimension_y']:
+            rotated_box = rotate_box(box)
+            #update shipping_dict with new set of boxes
+            updated_boxes = []
+            for b in boxes_df:
+                if b['box_index'] == rotated_box['box_index']:
+                    updated_boxes.append(rotated_box)
+                else:
+                    updated_boxes.append(b)
+            shipping_dict['boxes'] = updated_boxes
         shipping_dict = put_box_in_package(shipping_dict, box_index, package_id)
 
     return shipping_dict
@@ -406,3 +442,54 @@ def initialize_shipping(filename):
     shipping_dict = pack_boxes_randomly(shipping_dict)
 
     return shipping_dict
+
+
+def visualise_shipping(shipping_dict):
+    """
+    plot packages and boxes from shipping_dict
+    :param shipping_dict: {'area': overall area occupied by all packages,
+    'n_packages': number of packages,
+     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
+    """
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+
+    gap: float = 50.0
+    # plt.axis("off")
+    x_start = 0.0
+    y_start = 0.0
+
+    for package in shipping_dict['packages']:
+        # plot package one after another with a gap
+        package_width = package['dimension_x']
+        package_height = package['dimension_y']
+        rect = matplotlib.patches.Rectangle((x_start, y_start), package_width, package_height,
+                                            fc='none', edgecolor='k', linewidth=5)
+        ax.add_patch(rect)
+        boxes = get_boxes_in_package(package['package_id'], shipping_dict)
+        for box in boxes:
+            # plot boxes inside package one after another
+            box_width = box['dimension_x']
+            box_height = box['dimension_y']
+            x_center = box['x_center']
+            y_center = box['y_center']
+            box_x_start = x_start + x_center - box_width / 2.0
+            box_y_start = y_start + y_center - box_height / 2.0
+            if box['rotated'] == 'Rotated':
+                color = 'r'
+            else:
+                color = 'y'
+            rect = matplotlib.patches.Rectangle((box_x_start, box_y_start), box_width, box_height,
+                                                fc=color, edgecolor='b', linewidth=1)
+            ax.add_patch(rect)
+
+        x_start += package_width + gap
+    figure_width = x_start + package_width + gap
+    figure_height = max([package['dimension_y'] for package in shipping_dict['packages']]) + gap
+    plt.xlim([-gap, figure_width])
+    plt.ylim([-gap, figure_height])
+
+    plt.show()
