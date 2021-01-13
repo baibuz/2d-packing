@@ -3,14 +3,16 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 
-global packages_dimensions, input_file_boxes
+global packages_dimensions, input_file_boxes, precision
 package_types = {'package_type1': [800, 1200],
                  'package_type2': [800, 600]}  # dictionary of available package types with dimensions in cm
+precision: float = 1.0  # precision of coordinates
 
 seed = 1
-#np.random.seed(seed)
-np.random.seed(None)
-print('seed = ',np.random.get_state()[1][0])
+np.random.seed(seed)
+# np.random.seed(None)
+print('seed = ', np.random.get_state()[1][0])
+
 
 def get_box(box_index, boxes_df):
     """
@@ -295,6 +297,7 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     """
     assign random coordinates to box inside package, it is assumed that box fits to package
     box is not rotated inside function
+    coordinates are assigned within precision stored in global variable precision
     :param shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]}
@@ -315,8 +318,11 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     box_to_move['package_id'] = package_id
     # generate random x coordinate of box center
     package_length = [package['dimension_x'] for package in packages_df if package['package_id'] == package_id][0]
-    box_to_move['x_center'] = np.random.uniform(box_to_move['dimension_x'] / 2.0,
-                                                package_length - box_to_move['dimension_x'] / 2.0)
+
+    available_x_center = np.arange(box_to_move['dimension_x'] / 2.0,
+                                   package_length - box_to_move['dimension_x'] / 2.0 + precision,
+                                   precision)
+    box_to_move['x_center'] = np.random.choice(available_x_center)
     # boxes in package that intersect with box_to_move in x direction
     intersect_boxes = []
     for box in boxes_list:
@@ -402,7 +408,7 @@ def pack_boxes_randomly(shipping_dict):
         package = get_package(package_id, shipping_dict['packages'])
         if box['dimension_x'] > package['dimension_x'] or box['dimension_y'] > package['dimension_y']:
             rotated_box = rotate_box(box)
-            #update shipping_dict with new set of boxes
+            # update shipping_dict with new set of boxes
             updated_boxes = []
             for b in boxes_df:
                 if b['box_index'] == rotated_box['box_index']:
@@ -467,7 +473,7 @@ def visualise_shipping(shipping_dict):
         package_width = package['dimension_x']
         package_height = package['dimension_y']
         rect = matplotlib.patches.Rectangle((x_start, y_start), package_width, package_height,
-                                            fc='none', edgecolor='k', linewidth=5)
+                                            fc= 'royalblue', edgecolor='k', linewidth=1)
         ax.add_patch(rect)
         boxes = get_boxes_in_package(package['package_id'], shipping_dict)
         for box in boxes:
@@ -479,11 +485,11 @@ def visualise_shipping(shipping_dict):
             box_x_start = x_start + x_center - box_width / 2.0
             box_y_start = y_start + y_center - box_height / 2.0
             if box['rotated'] == 'Rotated':
-                color = 'r'
+                color = 'firebrick'
             else:
-                color = 'y'
+                color = 'gold'
             rect = matplotlib.patches.Rectangle((box_x_start, box_y_start), box_width, box_height,
-                                                fc=color, edgecolor='b', linewidth=1)
+                                                fc=color, edgecolor='k', linewidth=0.5)
             ax.add_patch(rect)
 
         x_start += package_width + gap
