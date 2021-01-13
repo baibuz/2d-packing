@@ -701,13 +701,14 @@ def change_shipping_randomly(shipping_dict):
     elif rndn == 1:
         # move random box to another random package, put on top of highest box below
         shipping_dict_modify = move_box_to_random_package(shipping_dict_modify, random_box_index)
-    '''
+
     elif rndn == 2:
         # rotate box
         shipping_dict_modify = rotate_box(shipping_dict_modify, random_box_index)
-    
+    '''
     elif rndn == 3:
         # swap two boxes in the same package
+        
     elif rndn == 4:
         # swap two boxes from different packages
     elif rndn == 5:
