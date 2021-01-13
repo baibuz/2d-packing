@@ -13,6 +13,14 @@ np.random.seed(seed)
 # np.random.seed(None)
 print('seed = ', np.random.get_state()[1][0])
 
+# Metpolis Monte Carlo simulated annealing parameters.
+global c0
+c0 = 10000  # initial value of control parameter
+# alpha = 0.5  # cooling parameter
+alpha = 0.0002
+c_min = 50  # minimal value of control parameter
+max_number_steps = 1000  # maximum number of steps for every cooling parameter
+
 
 def get_box(box_index, boxes_df):
     """
@@ -295,7 +303,8 @@ def if_intersect(box_1, box_2):
 
 def put_box_in_package(shipping_dict, box_index, package_id):
     """
-    assign random coordinates to box inside package, it is assumed that box fits to package
+    assign random x coordinates to box inside package, no checks performed on wether box fits to package
+    put box on top of another box if there is another box in x coordinate
     box is not rotated inside function
     coordinates are assigned within precision stored in global variable precision
     :param shipping_dict: dictionary with a shipping info in a format:
@@ -473,7 +482,7 @@ def visualise_shipping(shipping_dict):
         package_width = package['dimension_x']
         package_height = package['dimension_y']
         rect = matplotlib.patches.Rectangle((x_start, y_start), package_width, package_height,
-                                            fc= 'royalblue', edgecolor='k', linewidth=1)
+                                            fc='royalblue', edgecolor='k', linewidth=1)
         ax.add_patch(rect)
         boxes = get_boxes_in_package(package['package_id'], shipping_dict)
         for box in boxes:
@@ -489,7 +498,8 @@ def visualise_shipping(shipping_dict):
             else:
                 color = 'gold'
             rect = matplotlib.patches.Rectangle((box_x_start, box_y_start), box_width, box_height,
-                                                fc=color, edgecolor='k', linewidth=0.5)
+                                                fc=color, edgecolor='k', linewidth=0.5, label=box['box_index'])
+            plt.text(box_x_start + box_width / 2.0, box_y_start + box_height / 2.0, box['box_index'], fontsize=5)
             ax.add_patch(rect)
 
         x_start += package_width + gap
@@ -499,3 +509,99 @@ def visualise_shipping(shipping_dict):
     plt.ylim([-gap, figure_height])
 
     plt.show()
+
+
+def change_shipping_randomly(shipping_dict):
+    """
+    1. randomly perform one of the modifications in shipping:
+    - move box to random x coordinate in the same package, put on top of highest box below
+    - move box to random x coordinate in random package, put on top of highest box below
+    - rotate random box
+    - swap x coordinates of two random boxes in the same container, y coordinates are recalculated
+    - swap x coordinates of two random boxes from different containers, y coordinates are recalculated
+    2. accept or reject modification depending on whether any boxes are outside of container or intersect with other boxes
+    3. remove any empty packages
+    4. update shipping area
+    4. if modification accepted, modify shipping_dict
+    :param shipping_dict: dictionary with initial arrangement {'area': overall area occupied by all packages,
+    'n_packages': number of packages,
+     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
+    :return: shipping_dict , updated if  modification was accepted
+    """
+    boxes = shipping_dict['boxes']
+    # perform one of the modifications in shipping
+    n_permitted_moves = 5
+    rndn = np.random.randint(0, n_permitted_moves)
+    rndn = 0
+    if rndn == 0:
+        # move random box to random x coordinate in the same package, put on top of highest box below
+        random_box_index = np.random.choice([b['box_index'] for b in boxes])
+        package_index = get_box(random_box_index, boxes)['package_id']
+        shipping_dict = put_box_in_package(shipping_dict, random_box_index, package_index)
+    '''
+    elif rndn == 1:
+        # move random box to another random package, put on top of highest box below
+        random_box = np.random.choice([boxes])
+    elif rndn == 2:
+        # rotate box
+    elif rndn == 3:
+        # swap two boxes in the same package
+    elif rndn == 4:
+        # swap two boxes from different packages
+    elif rndn == 5:
+        # add a new container of random type
+    '''
+    # 4. update shipping area
+
+    return shipping_dict
+
+
+def maxwell_distribution(delta, c):
+    """
+    calculates maxwell distribution for a given change in cost function
+    :param delta: change in cost function (area in 2D packing)
+    :param c: control parameter (or temperature)
+    :return: exp(-delta/c)
+    """
+    return np.exp(-delta / c)
+
+
+def packing_with_monte_carlo(shipping_dict):
+    """
+    optimize arrangement of boxes in packages with Metropolis Monte Carlo simulated annealing method
+    uses global variable:
+    :param shipping_dict: dictionary with initial arrangement {'area': overall area occupied by all packages,
+    'n_packages': number of packages,
+     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
+    :return: updated shipping_dict
+    """
+    c = c0
+    while c >= c_min:  # loop over control parameter
+
+        # perform max_number_steps for each cooling parameter
+        for step_counter in range(max_number_steps):
+            area_before_change = shipping_dict['area']
+            shipping_dict_modified = change_shipping_randomly(shipping_dict)  # randomly modify shipping
+            if shipping_dict_modified is False:
+                # if random move was not accepted because box was put into occupied space or outside the package
+                # continue to next step without accepting the modification
+                continue
+            else:
+                area_after_change = shipping_dict_modified['area']
+                if area_after_change <= area_before_change:
+                    # if area of packages became smaller (package was removed) or stayed the same, update shipping_dic
+                    shipping_dict = shipping_dict_modified
+                else:
+                    # if area of packages became larger,
+                    # accept or reject the move with the probability, according to Maxwell distribution
+                    u = np.random.random_sample()
+                    f = maxwell_distribution(area_after_change - area_before_change, c)
+                    if u < maxwell_distribution(area_after_change - area_before_change, c):
+                        # accepted
+                        shipping_dict = shipping_dict_modified
+        c = alpha * c
+    return shipping_dict
