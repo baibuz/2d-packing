@@ -50,7 +50,8 @@ def get_boxes_in_package(package_id, shipping_info):
     :param package_id:
     :param shipping_info: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
-    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]    :return:
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
+    :return: list of dictionaries  [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     """
     boxes = shipping_info['boxes']
     return [box for box in boxes if box['package_id'] == package_id]
@@ -102,6 +103,21 @@ def if_box_fits_to_empty_package(box_dimension_x, box_dimension_y, package_type)
         if box_dimension_x > package_dimensions[1]:
             return False
     return True
+
+
+def if_package_empty(package_id, shipping_dict):
+    """
+    check if package is empty
+    :param package_id: id of package to be checked
+    :param shipping_dict:
+    :return: True if package is empty; False if there is at least one box in a package
+    """
+
+    boxes = get_boxes_in_package(package_id, shipping_dict)
+    if len(boxes) == 0:
+        return True
+    else:
+        return False
 
 
 def boxes_checked(boxes_df):
@@ -298,6 +314,31 @@ def add_package(shipping_dict, package_type):
     shipping_dict['packages'] = packages_df
     shipping_dict['n_packages'] = shipping_dict['n_packages'] + 1
     shipping_dict['area'] = calculate_area_packages(shipping_dict['packages'])
+    return shipping_dict
+
+
+def remove_empty_package(package_id, shipping_dict):
+    """
+    checks that package is empty,
+    remove package of package_id from shipping_dict
+    :param shipping_dict: dictionary with a shipping info in a format:
+    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]}
+    :param package_id: id of package to be removed
+    :return: updated shipping_dict, False if package is not empty
+    """
+    packages_df = copy.deepcopy(shipping_dict['packages'])
+    boxes_df = shipping_dict['boxes']
+    if not if_package_empty(package_id, shipping_dict):
+        print("Error: empty package to be removed is not empty. Exit ")
+        return False
+
+    updated_packages = []
+    for index in range(len(packages_df)):
+        row = packages_df[index]
+        if row['package_id'] != package_id:
+            updated_packages.append(row)
+    shipping_dict['packages'] = updated_packages
     return shipping_dict
 
 
@@ -734,7 +775,6 @@ def change_shipping_randomly(shipping_dict):
     elif rndn == 5:
         # add a new container of random type
     '''
-    # 2. remove empty containers
     # 4. update shipping area
     shipping_dict['area'] = calculate_area_packages(shipping_dict['packages'])
     return shipping_dict
@@ -777,14 +817,22 @@ def packing_with_monte_carlo(shipping_dict):
                 # continue to next step without accepting the modification
                 continue
             else:
+                # 2. remove any empty containers
+                for package in shipping_dict_modified['packages']:
+                    if if_package_empty(package['package_id'], shipping_dict_modified):
+                        shipping_dict_modified = remove_empty_package(package['package_id'], shipping_dict_modified)
                 area_after_change = shipping_dict_modified['area']
                 if area_after_change <= area_before_change:
                     # if area of packages became smaller (package was removed) or stayed the same, update shipping_dic
                     current_shipping = {}
                     current_shipping = copy.deepcopy(shipping_dict_modified)
                 else:
-                    # if area of packages became larger,
+                    # if empty area in packages became larger,
                     # accept or reject the move with the probability, according to Maxwell distribution
+
+                    #calculate_empty_area
+
+
                     u = np.random.random_sample()
                     f = maxwell_distribution(area_after_change - area_before_change, c)
                     if u < f:
