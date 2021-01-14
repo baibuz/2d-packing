@@ -395,7 +395,14 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     else:
         # put on bottom of the package
         box_to_move['y_center'] = box_to_move['dimension_y'] / 2.0  # put on bottom of the package
-    shipping_dict = update_shipping_with_box(box_to_move, shipping_dict)
+    updated_boxes = []
+    for index in range(len(boxes_df)):
+        row = boxes_df[index]
+        if row['box_index'] == box_to_move['box_index']:
+            updated_boxes.append(box_to_move)
+        else:
+            updated_boxes.append(row)
+    shipping_dict['boxes'] = updated_boxes
     return shipping_dict
 
 
