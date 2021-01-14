@@ -185,8 +185,7 @@ def pick_package_type(box):
 def pick_package(packages_df):
     """
     randomly pick a package form the dictionary
-    :param shipping_dict: dictionary with a shipping info in a format:
-    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    :param packages_df: list of dictionaries [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     :return: package dictionary {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
     """
@@ -544,6 +543,35 @@ def swap_boxes_same_container(box_1_index, box_2_index, shipping_dict):
     return shipping_dict
 
 
+def swap_boxes(box_1_index, box_2_index, shipping_dict):
+    """
+    swap coordinates of two boxes
+    :param box_1_index: index of box 1
+    :param box_2_index: index of box 2
+    :param shipping_dict: dictionary with a shipping info in a format:
+    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
+    :return: updated shipping_dict
+    """
+    box_1 = get_box(box_1_index, shipping_dict['boxes'])
+    box_2 = get_box(box_2_index, shipping_dict['boxes'])
+    box_1_package = box_1['package_id']
+    box_2_package = box_2['package_id']
+
+    box_1_x_center = box_1['x_center']
+    box_2_x_center = box_2['x_center']
+    box_1_y_center = box_1['y_center']
+    box_2_y_center = box_2['y_center']
+    box_1['x_center'] = box_2_x_center
+    box_1['y_center'] = box_2_y_center
+    box_2['x_center'] = box_1_x_center
+    box_2['y_center'] = box_1_y_center
+    box_1['package_id'] = box_2_package
+    box_2['package_id'] = box_1_package
+    shipping_dict = update_shipping_with_box(box_1, shipping_dict)
+    shipping_dict = update_shipping_with_box(box_2, shipping_dict)
+    return shipping_dict
+
 def if_box_fits_to_shipping(box, shipping_dict):
     """
     return True if box fits to at least one package in shipping_dict
@@ -692,7 +720,7 @@ def change_shipping_randomly(shipping_dict):
     :return: shipping_dict , updated if  modification was accepted
     """
     # perform one of the modifications in shipping
-    n_permitted_moves = 4
+    n_permitted_moves = 5
     rndn = np.random.randint(0, n_permitted_moves)
     random_box_index = np.random.choice([b['box_index'] for b in shipping_dict['boxes']])
     random_box = get_box(random_box_index, shipping_dict['boxes'])
@@ -714,11 +742,15 @@ def change_shipping_randomly(shipping_dict):
             indexes = [b['box_index'] for b in boxes_in_package if b['box_index'] != random_box_index]
             random_box_2_index = np.random.choice(indexes)
             shipping_dict = swap_boxes_same_container(random_box_index, random_box_2_index, shipping_dict)
-    '''
+
     elif rndn == 4:
+
         # swap two boxes from different packages
-        
-    
+        indexes = [b['box_index'] for b in shipping_dict['boxes'] if b['box_index'] != random_box_index]
+        random_box_2_index = np.random.choice(indexes)
+        shipping_dict = swap_boxes(random_box_index, random_box_2_index, shipping_dict)
+
+    '''
     elif rndn == 5:
         # add a new container of random type
     '''

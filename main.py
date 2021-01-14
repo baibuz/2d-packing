@@ -8,7 +8,7 @@ if __name__ == '__main__':
     package_types = {'package_type1': [800, 1200],
                      'package_type2': [800, 600]} # dictionary of available package types with dimensions in cm
     shipping = initialize_shipping(input_file_boxes)
-    #visualise_shipping(shipping)
+    visualise_shipping(shipping)
     start = time.time()
     shipping = packing_with_monte_carlo(shipping)
     print('time to pack with MC:', time.time()-start, 'sec')
