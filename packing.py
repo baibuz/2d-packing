@@ -231,7 +231,6 @@ def if_box_fits_to_package(box_index, package_id, shipping_dict):
     """
     boxes_df = shipping_dict['boxes']
     box_to_fit = get_box(box_index, boxes_df)
-    box_dimension_y = box_to_fit['dimension_y']
     packages_df = shipping_dict['packages']
     package = get_package(package_id, packages_df)
     if box_to_fit['dimension_x'] > package['dimension_x']:
@@ -396,14 +395,7 @@ def put_box_in_package(shipping_dict, box_index, package_id):
     else:
         # put on bottom of the package
         box_to_move['y_center'] = box_to_move['dimension_y'] / 2.0  # put on bottom of the package
-    updated_boxes = []
-    for index in range(len(boxes_df)):
-        row = boxes_df[index]
-        if row['box_index'] == box_to_move['box_index']:
-            updated_boxes.append(box_to_move)
-        else:
-            updated_boxes.append(row)
-    shipping_dict['boxes'] = updated_boxes
+    shipping_dict = update_shipping_with_box(box_to_move, shipping_dict)
     return shipping_dict
 
 
@@ -432,14 +424,7 @@ def move_box_in_same_package(shipping_dict, box_index):
                                    package_width - box_to_move['dimension_y'] / 2.0 + precision,
                                    precision)
     box_to_move['y_center'] = np.random.choice(available_y_center)
-    updated_boxes = []
-    for index in range(len(boxes_df)):
-        row = boxes_df[index]
-        if row['box_index'] == box_to_move['box_index']:
-            updated_boxes.append(copy.deepcopy(box_to_move))
-        else:
-            updated_boxes.append(copy.deepcopy(row))
-    shipping_dict['boxes'] = updated_boxes
+    shipping_dict = update_shipping_with_box(box_to_move, shipping_dict)
     return copy.deepcopy(shipping_dict)
 
 
@@ -478,14 +463,8 @@ def move_box_to_random_package(shipping_dict, box_index):
                                    precision)
     box_to_move['package_id'] = random_package_id
     box_to_move['y_center'] = np.random.choice(available_y_center)
-    updated_boxes = []
-    for index in range(len(boxes_df)):
-        row = boxes_df[index]
-        if row['box_index'] == box_to_move['box_index']:
-            updated_boxes.append(box_to_move)
-        else:
-            updated_boxes.append(row)
-    shipping_dict['boxes'] = updated_boxes
+    shipping_dict = update_shipping_with_box(box_to_move, shipping_dict)
+
     return copy.deepcopy(shipping_dict)
 
 
@@ -503,14 +482,8 @@ def rotate_box(shipping_dict, box_index):
     rotated_box = get_rotated_box(box_to_rotate)
 
     # update shipping_dict with new box
-    updated_boxes = []
-    for index in range(len(boxes_df)):
-        row = boxes_df[index]
-        if row['box_index'] == rotated_box['box_index']:
-            updated_boxes.append(copy.deepcopy(rotated_box))
-        else:
-            updated_boxes.append(copy.deepcopy(row))
-    shipping_dict['boxes'] = updated_boxes
+    shipping_dict = update_shipping_with_box(rotated_box, shipping_dict)
+
     return shipping_dict
 
 
@@ -571,6 +544,7 @@ def swap_boxes(box_1_index, box_2_index, shipping_dict):
     shipping_dict = update_shipping_with_box(box_1, shipping_dict)
     shipping_dict = update_shipping_with_box(box_2, shipping_dict)
     return shipping_dict
+
 
 def if_box_fits_to_shipping(box, shipping_dict):
     """
@@ -749,11 +723,11 @@ def change_shipping_randomly(shipping_dict):
         indexes = [b['box_index'] for b in shipping_dict['boxes'] if b['box_index'] != random_box_index]
         random_box_2_index = np.random.choice(indexes)
         shipping_dict = swap_boxes(random_box_index, random_box_2_index, shipping_dict)
-
     '''
     elif rndn == 5:
         # add a new container of random type
     '''
+    # 2. remove empty containers
     # 4. update shipping area
     shipping_dict['area'] = calculate_area_packages(shipping_dict['packages'])
     return shipping_dict
