@@ -182,7 +182,7 @@ def pick_package_type(box):
     return package_type_to_fill
 
 
-def pick_package(shipping_dict):
+def pick_package(packages_df):
     """
     randomly pick a package form the dictionary
     :param shipping_dict: dictionary with a shipping info in a format:
@@ -190,13 +190,34 @@ def pick_package(shipping_dict):
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     :return: package dictionary {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
     """
-    packages_df = shipping_dict['packages']
     if len(packages_df) == 0:
         print("No packages to pick from shipping_dict, exit")
         return False
     ind = np.random.randint(0, len(packages_df))
     package = packages_df[ind]
     return package
+
+
+def update_shipping_with_box(box, shipping_dict):
+    """
+    modifies shipping dictionary by adding box
+    :param box: {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}
+    :param shipping_dict: shipping_dict: dictionary with a shipping info in a format:
+    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
+    :return:
+    """
+    boxes_df = copy.deepcopy(shipping_dict['boxes'])
+    # update shipping_dict with new box
+    updated_boxes = []
+    for index in range(len(boxes_df)):
+        row = boxes_df[index]
+        if row['box_index'] == box['box_index']:
+            updated_boxes.append(copy.deepcopy(box))
+        else:
+            updated_boxes.append(copy.deepcopy(row))
+    shipping_dict['boxes'] = updated_boxes
+    return shipping_dict
 
 
 def if_box_fits_to_package(box_index, package_id, shipping_dict):
@@ -240,7 +261,7 @@ def pick_package_for_box(box, shipping_dict):
     """
     picked = False
     while not picked:
-        package = pick_package(shipping_dict)
+        package = pick_package(shipping_dict['packages'])
         if if_box_fits_to_package(box['box_index'], package['package_id'], shipping_dict):
             picked = True
     return package['package_id']
@@ -390,15 +411,15 @@ def put_box_in_package(shipping_dict, box_index, package_id):
 def move_box_in_same_package(shipping_dict, box_index):
     '''
     assign random x and y coordinates within package borders
-    :param shipping_dict: dictionary with a shipping info in a format:
+    :param shipping: shipping_dict: dictionary with a shipping info in a format:
     {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
     'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
     :param box_index: index of the box to be moved
     :return:
     '''
-    boxes_df = shipping_dict['boxes']
+    boxes_df = copy.deepcopy(shipping_dict['boxes'])
     packages_df = shipping_dict['packages']
-    box_to_move = get_box(box_index, shipping_dict['boxes'])
+    box_to_move = get_box(box_index, boxes_df)
     package_id = box_to_move['package_id']
     # generate random x coordinate within package borders
     package_length = [package['dimension_x'] for package in packages_df if package['package_id'] == package_id][0]
@@ -416,11 +437,11 @@ def move_box_in_same_package(shipping_dict, box_index):
     for index in range(len(boxes_df)):
         row = boxes_df[index]
         if row['box_index'] == box_to_move['box_index']:
-            updated_boxes.append(box_to_move)
+            updated_boxes.append(copy.deepcopy(box_to_move))
         else:
-            updated_boxes.append(row)
+            updated_boxes.append(copy.deepcopy(row))
     shipping_dict['boxes'] = updated_boxes
-    return shipping_dict
+    return copy.deepcopy(shipping_dict)
 
 
 def move_box_to_random_package(shipping_dict, box_index):
@@ -432,14 +453,15 @@ def move_box_to_random_package(shipping_dict, box_index):
     :param box_index: index of the box to be moved
     :return:
     '''
-    boxes_df = shipping_dict['boxes']
+
+    boxes_df = copy.deepcopy(shipping_dict['boxes'])
     packages_df = shipping_dict['packages']
 
-    box_to_move = get_box(box_index, shipping_dict['boxes'])
+    box_to_move = get_box(box_index, boxes_df)
     package_original = box_to_move['package_id']
     random_package_id = package_original
     while package_original == random_package_id:  # make sure that picked package is not the same where the box already is
-        random_package = pick_package(shipping_dict)
+        random_package = pick_package(packages_df)
         random_package_id = random_package['package_id']
 
     # generate random x coordinate within package borders
@@ -465,7 +487,7 @@ def move_box_to_random_package(shipping_dict, box_index):
         else:
             updated_boxes.append(row)
     shipping_dict['boxes'] = updated_boxes
-    return shipping_dict
+    return copy.deepcopy(shipping_dict)
 
 
 def rotate_box(shipping_dict, box_index):
@@ -477,17 +499,50 @@ def rotate_box(shipping_dict, box_index):
     :param box_index: index of the box to be moved
     :return: updated shipping_dict
     """
-    box_to_rotate = get_box(box_index, shipping_dict['boxes'])
+    boxes_df = copy.deepcopy(shipping_dict['boxes'])
+    box_to_rotate = get_box(box_index, boxes_df)
     rotated_box = get_rotated_box(box_to_rotate)
-    # update shipping_dict with new set of boxes
+
+    # update shipping_dict with new box
     updated_boxes = []
-    for b in shipping_dict['boxes']:
-        if b['box_index'] == rotated_box['box_index']:
-            updated_boxes.append(rotated_box)
+    for index in range(len(boxes_df)):
+        row = boxes_df[index]
+        if row['box_index'] == rotated_box['box_index']:
+            updated_boxes.append(copy.deepcopy(rotated_box))
         else:
-            updated_boxes.append(b)
+            updated_boxes.append(copy.deepcopy(row))
     shipping_dict['boxes'] = updated_boxes
     return shipping_dict
+
+
+def swap_boxes_same_container(box_1_index, box_2_index, shipping_dict):
+    """
+    swap coordinates of two boxes in the same container
+    :param box_1_index:
+    :param box_2_index:
+    :param shipping_dict: dictionary with a shipping info in a format:
+    {'area':a, 'n_packages':n,'packages': [{'package_id':,'package_type':,'dimension_x':,'dimension_y':}],
+    'boxes': [{'box_index':, 'dimension_x':, 'dimension_y':,'package_id':, 'rotated':,'x_center': , 'y_center':}]
+    :return: updated shipping_dict
+    """
+    box_1 = get_box(box_1_index, shipping_dict['boxes'])
+    box_2 = get_box(box_2_index, shipping_dict['boxes'])
+    if box_1['package_id'] != box_2['package_id']:
+        print(" in swap_boxes_same_container: package id is not the same. Exit")
+        return False
+    box_1_x_center = box_1['x_center']
+    box_2_x_center = box_2['x_center']
+    box_1_y_center = box_1['y_center']
+    box_2_y_center = box_2['y_center']
+    box_1['x_center'] = box_2_x_center
+    box_1['y_center'] = box_2_y_center
+    box_2['x_center'] = box_1_x_center
+    box_2['y_center'] = box_1_y_center
+    shipping_dict = update_shipping_with_box(box_1, shipping_dict)
+    shipping_dict = update_shipping_with_box(box_2, shipping_dict)
+
+    return shipping_dict
+
 
 def if_box_fits_to_shipping(box, shipping_dict):
     """
@@ -587,6 +642,149 @@ def initialize_shipping(filename):
     return shipping_dict
 
 
+def if_shipping_valid(shipping_dict):
+    """
+    return True if boxes in packages don't intersect with each other and
+    if all boxes are withing corresponding package dimensions
+    :param shipping_dict: dictionary {'area': overall area occupied by all packages, 'n_packages': number of packages,
+     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':},
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
+    :return: True or False
+    """
+    # check each package
+    packages = shipping_dict['packages']
+
+    for package in packages:
+        boxes_in_package = get_boxes_in_package(package['package_id'], shipping_dict)
+        for box in boxes_in_package:
+            if box['x_center'] - box['dimension_x'] / 2.0 < 0.0 or \
+                    box['x_center'] + box['dimension_x'] / 2.0 > package['dimension_x'] or \
+                    box['y_center'] - box['dimension_y'] / 2.0 < 0.0 or \
+                    box['y_center'] + box['dimension_y'] / 2.0 > package['dimension_y']:
+                return False
+            for box2 in boxes_in_package:
+                if box['box_index'] == box2['box_index']:
+                    continue
+                if if_intersect_x(box, box2):  # if boxes intersect in x direction
+                    if if_intersect_y(box, box2):  # check y direction
+                        return False
+    return True
+
+
+def change_shipping_randomly(shipping_dict):
+    """
+    1. randomly perform one of the modifications in shipping:
+    - move box to random x coordinate in the same package, put on top of highest box below
+    - move box to random x coordinate in random package, put on top of highest box below
+    - rotate random box
+    - swap x coordinates of two random boxes in the same container, y coordinates are recalculated
+    - swap x coordinates of two random boxes from different containers, y coordinates are recalculated
+    2. reject modification if any boxes in updated shipping are outside of container or intersect with each other
+    3. remove any empty packages
+    4. update shipping area
+    4. if modification accepted, modify shipping_dict
+    :param shipping_dict: dictionary with initial arrangement {'area': overall area occupied by all packages,
+    'n_packages': number of packages,
+     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
+    :return: shipping_dict , updated if  modification was accepted
+    """
+    # perform one of the modifications in shipping
+    n_permitted_moves = 4
+    rndn = np.random.randint(0, n_permitted_moves)
+    random_box_index = np.random.choice([b['box_index'] for b in shipping_dict['boxes']])
+    random_box = get_box(random_box_index, shipping_dict['boxes'])
+    random_box_package_id = random_box['package_id']
+    if rndn == 0:
+        # move random box to random x coordinate in the same package, put on top of highest box below
+        shipping_dict = move_box_in_same_package(shipping_dict, random_box_index)
+    elif rndn == 1:
+        # move random box to another random package, put on top of highest box below
+        shipping_dict = move_box_to_random_package(shipping_dict, random_box_index)
+    elif rndn == 2:
+        # rotate box
+        shipping_dict = rotate_box(shipping_dict, random_box_index)
+    elif rndn == 3:
+        # swap two boxes in the same package
+        # are there other boxes in package:
+        boxes_in_package = get_boxes_in_package(random_box_package_id, shipping_dict)
+        if len(boxes_in_package) > 1:
+            indexes = [b['box_index'] for b in boxes_in_package if b['box_index'] != random_box_index]
+            random_box_2_index = np.random.choice(indexes)
+            shipping_dict = swap_boxes_same_container(random_box_index, random_box_2_index, shipping_dict)
+    '''
+    elif rndn == 4:
+        # swap two boxes from different packages
+        
+    
+    elif rndn == 5:
+        # add a new container of random type
+    '''
+    # 4. update shipping area
+    shipping_dict['area'] = calculate_area_packages(shipping_dict['packages'])
+    return shipping_dict
+
+
+def maxwell_distribution(delta, c):
+    """
+    calculates maxwell distribution for a given change in cost function
+    :param delta: change in cost function (area in 2D packing)
+    :param c: control parameter (or temperature)
+    :return: exp(-delta/c)
+    """
+    return np.exp(-delta / c)
+
+
+def packing_with_monte_carlo(shipping_dict):
+    """
+    optimize arrangement of boxes in packages with Metropolis Monte Carlo simulated annealing method
+    uses global variable:
+    :param shipping_dict: dictionary with initial arrangement {'area': overall area occupied by all packages,
+    'n_packages': number of packages,
+     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
+     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
+                'x_center': , 'y_center':}
+    :return: updated shipping_dict
+    """
+    current_shipping = copy.deepcopy(shipping_dict)
+    c = c0
+    while c >= c_min:  # loop over control parameter
+        # perform max_number_steps for each cooling parameter
+        for step_counter in range(max_number_steps):
+            area_before_change = current_shipping['area']
+            shipping_dict_modified = {}
+            shipping_dict_modified = copy.deepcopy(current_shipping)
+            shipping_dict_modified = change_shipping_randomly(shipping_dict_modified)  # randomly modify shipping
+            # 2. reject modification if any boxes in updated shipping are outside of container or intersect with each other
+
+            if not if_shipping_valid(shipping_dict_modified):
+                # if random move was not accepted because box was put into occupied space or outside the package
+                # continue to next step without accepting the modification
+                continue
+            else:
+                area_after_change = shipping_dict_modified['area']
+                if area_after_change <= area_before_change:
+                    # if area of packages became smaller (package was removed) or stayed the same, update shipping_dic
+                    current_shipping = {}
+                    current_shipping = copy.deepcopy(shipping_dict_modified)
+                else:
+                    # if area of packages became larger,
+                    # accept or reject the move with the probability, according to Maxwell distribution
+                    u = np.random.random_sample()
+                    f = maxwell_distribution(area_after_change - area_before_change, c)
+                    if u < f:
+                        # accepted
+                        current_shipping = {}
+                        current_shipping = copy.deepcopy(shipping_dict_modified)
+
+        c = alpha * c
+    shipping_dict = []
+    shipping_dict = copy.deepcopy(current_shipping)
+    return current_shipping
+
+
 def visualise_shipping(shipping_dict):
     """
     plot packages and boxes from shipping_dict
@@ -637,139 +835,3 @@ def visualise_shipping(shipping_dict):
     plt.ylim([-gap, figure_height])
 
     plt.show()
-
-
-def if_shipping_valid(shipping_dict):
-    """
-    return True if boxes in packages don't intersect with each other and
-    if all boxes are withing corresponding package dimensions
-    :param shipping_dict: dictionary {'area': overall area occupied by all packages, 'n_packages': number of packages,
-     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':},
-     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
-                'x_center': , 'y_center':}
-    :return: True or False
-    """
-    # check each package
-    packages = shipping_dict['packages']
-
-    for package in packages:
-        boxes_in_package = get_boxes_in_package(package['package_id'], shipping_dict)
-        for box in boxes_in_package:
-            if box['x_center'] - box['dimension_x'] / 2.0 < 0.0 or \
-                    box['x_center'] + box['dimension_x'] / 2.0 > package['dimension_x'] or \
-                    box['y_center'] - box['dimension_y'] / 2.0 < 0.0 or \
-                    box['y_center'] + box['dimension_y'] / 2.0 > package['dimension_y']:
-                return False
-            for box2 in boxes_in_package:
-                if box['box_index'] == box2['box_index']:
-                    continue
-                if if_intersect_x(box, box2):  # if boxes intersect in x direction
-                    if if_intersect_y(box, box2):  # check y direction
-                        return False
-    return True
-
-
-def change_shipping_randomly(shipping_dict):
-    """
-    1. randomly perform one of the modifications in shipping:
-    - move box to random x coordinate in the same package, put on top of highest box below
-    - move box to random x coordinate in random package, put on top of highest box below
-    - rotate random box
-    - swap x coordinates of two random boxes in the same container, y coordinates are recalculated
-    - swap x coordinates of two random boxes from different containers, y coordinates are recalculated
-    2. reject modification if any boxes in updated shipping are outside of container or intersect with each other
-    3. remove any empty packages
-    4. update shipping area
-    4. if modification accepted, modify shipping_dict
-    :param shipping_dict: dictionary with initial arrangement {'area': overall area occupied by all packages,
-    'n_packages': number of packages,
-     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
-     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
-                'x_center': , 'y_center':}
-    :return: shipping_dict , updated if  modification was accepted
-    """
-    shipping_dict_modify = copy.deepcopy(shipping_dict)
-    # perform one of the modifications in shipping
-    n_permitted_moves = 2
-    rndn = np.random.randint(0, n_permitted_moves)
-    random_box_index = np.random.choice([b['box_index'] for b in shipping_dict['boxes']])
-    if rndn == 0:
-        # move random box to random x coordinate in the same package, put on top of highest box below
-        package_index = get_box(random_box_index, shipping_dict['boxes'])['package_id']
-        shipping_dict_modify = move_box_in_same_package(shipping_dict_modify, random_box_index)
-
-    elif rndn == 1:
-        # move random box to another random package, put on top of highest box below
-        shipping_dict_modify = move_box_to_random_package(shipping_dict_modify, random_box_index)
-
-    elif rndn == 2:
-        # rotate box
-        shipping_dict_modify = rotate_box(shipping_dict_modify, random_box_index)
-    '''
-    elif rndn == 3:
-        # swap two boxes in the same package
-        
-    elif rndn == 4:
-        # swap two boxes from different packages
-    elif rndn == 5:
-        # add a new container of random type
-    '''
-    # 2. reject modification if any boxes in updated shipping are outside of container or intersect with each other
-
-    if not if_shipping_valid(shipping_dict_modify):
-        # print('not permitted')
-        return False
-    # 3. remove any empty packages
-
-    # 4. update shipping area
-    shipping_dict_modify['area'] = calculate_area_packages(shipping_dict_modify['packages'])
-    return shipping_dict_modify
-
-
-def maxwell_distribution(delta, c):
-    """
-    calculates maxwell distribution for a given change in cost function
-    :param delta: change in cost function (area in 2D packing)
-    :param c: control parameter (or temperature)
-    :return: exp(-delta/c)
-    """
-    return np.exp(-delta / c)
-
-
-def packing_with_monte_carlo(shipping_dict):
-    """
-    optimize arrangement of boxes in packages with Metropolis Monte Carlo simulated annealing method
-    uses global variable:
-    :param shipping_dict: dictionary with initial arrangement {'area': overall area occupied by all packages,
-    'n_packages': number of packages,
-     'packages': # list of dictionaries with keys {'package_id':,'package_type':,'dimension_x':,'dimension_y':}
-     'boxes': # list of dictionaries with keys  {'box_index':, 'dimension_x':, 'dimension_y':,'package_id':,'rotated':,
-                'x_center': , 'y_center':}
-    :return: updated shipping_dict
-    """
-    c = c0
-    while c >= c_min:  # loop over control parameter
-
-        # perform max_number_steps for each cooling parameter
-        for step_counter in range(max_number_steps):
-            area_before_change = shipping_dict['area']
-            shipping_dict_modified = change_shipping_randomly(shipping_dict)  # randomly modify shipping
-            if shipping_dict_modified is False:
-                # if random move was not accepted because box was put into occupied space or outside the package
-                # continue to next step without accepting the modification
-                continue
-            else:
-                area_after_change = shipping_dict_modified['area']
-                if area_after_change <= area_before_change:
-                    # if area of packages became smaller (package was removed) or stayed the same, update shipping_dic
-                    shipping_dict = shipping_dict_modified.copy()
-                else:
-                    # if area of packages became larger,
-                    # accept or reject the move with the probability, according to Maxwell distribution
-                    u = np.random.random_sample()
-                    f = maxwell_distribution(area_after_change - area_before_change, c)
-                    if u < maxwell_distribution(area_after_change - area_before_change, c):
-                        # accepted
-                        shipping_dict = shipping_dict_modified.copy()
-        c = alpha * c
-    return shipping_dict
